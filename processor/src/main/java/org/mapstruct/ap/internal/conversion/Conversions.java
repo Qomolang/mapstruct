@@ -21,6 +21,7 @@ import java.util.Calendar;
 import java.util.Currency;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -198,6 +199,7 @@ public class Conversions {
         register( Currency.class, String.class, new CurrencyToStringConversion() );
 
         register( UUID.class, String.class, new UUIDToStringConversion() );
+        register( Locale.class, String.class, new LocaleToStringConversion() );
 
         registerURLConversion();
     }
@@ -233,11 +235,14 @@ public class Conversions {
         register( Period.class, String.class, new StaticParseToStringConversion() );
         register( Duration.class, String.class, new StaticParseToStringConversion() );
 
-        // Java 8 to Date
+        // Java 8 time to Date
         register( ZonedDateTime.class, Date.class, new JavaZonedDateTimeToDateConversion() );
         register( LocalDateTime.class, Date.class, new JavaLocalDateTimeToDateConversion() );
         register( LocalDate.class, Date.class, new JavaLocalDateToDateConversion() );
         register( Instant.class, Date.class, new JavaInstantToDateConversion() );
+
+        // Java 8 time
+        register( LocalDateTime.class, LocalDate.class, new JavaLocalDateTimeToLocalDateConversion() );
 
     }
 
