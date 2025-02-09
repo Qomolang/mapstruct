@@ -150,6 +150,8 @@ public interface FruitMapper {
 为了允许抽象类/接口的映射，您需要设置 `subclassExhaustiveStrategy` 为 `RUNTIME_EXCEPTION` ，您可以通过 `@MapperConfig`, `@Mapper` 或者 `@BeanMapping` 注解来完成设置。如果您之后传进去一个 `GrapeDto` 类型的对象，会抛出来一个 `IllegalArgumentException` 异常，因为MapStruct不知道该如何映射一个 `GrapeDto` 。
 请添加缺失的子类映射 (`@SubclassMapping`) 来修复该问题。
 
+<<selection-based-on-qualifiers>> 可以进一步控制使用哪一个方法来映射具体的子类。您可以使用 `SubclassMapping#qualifiedByName` or `SubclassMapping#qualifiedBy` 中的一个来做这件事
+
 [TIP]
 ====
 如果子类的映射方法不存在，那么MapStruct会创建一个，并且新生成的映射方法会继承所有打在fruit映射上的注解。
@@ -284,7 +286,7 @@ MapStruct可以控制什么时候生成一个 `null` 校验。默认情况(`null
 
 在source不是原生类型时，选项 `nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS` 总是包含一个null校验，除非source bean中已经定义了一个存在性校验器。
 
-该策略以继承的方式运行，@Mapping#nullValueCheckStrategy会覆盖 `@BeanMapping#nullValueCheckStrategy`，同理，`@BeanMapping#nullValueCheckStrategy` 会覆盖 `@Mapper#nullValueCheckStrategy`，`@Mapper#nullValueCheckStrategy` 会覆盖 `@MaperConfig#nullValueCheckStrategy`。
+该策略以继承的方式运行，`@Mapping#nullValueCheckStrategy` 会覆盖 `@BeanMapping#nullValueCheckStrategy`，同理，`@BeanMapping#nullValueCheckStrategy` 会覆盖 `@Mapper#nullValueCheckStrategy`，`@Mapper#nullValueCheckStrategy` 会覆盖 `@MaperConfig#nullValueCheckStrategy`。
 
 [[source-presence-check]]
 === source存在性校验
@@ -302,15 +304,16 @@ source存在性校验器的名字可以通过MapStruct的SPI来更改，此方�
 
 [[conditional-mapping]]
 === 条件映射
+条件映射是 <<source-presence-check>> 的一种。
+不同之处在于，该方式允许用户自己写一个自定义条件方法，该方法可以用來判斷一个属性是否需要被映射。
+条件映射也可以用来判断一个source字段是否需要被映射
 
-可选映射是 <<source-presence-check>> 的一种。
-不同之处在于，该方式允许用户自己写一个自定义条件方法，该方法会在检查一个字段是否需要被映射时调用。
-
-自定义条件方法：被 `org.mapstruct.Condition` 注解环绕并且返回 `boolean` 的方法。
+对一个属性来说，自定义条件方法是：被 `org.mapstruct.Condition` 注解环绕并且返回 `boolean` 的方法。
+对于一个source参数来说，自定义条件方法是：被 `org.mapstruct.SourceParameterCondition` 或者 `org.mapstruct.Condition(appliesTo = org.mapstruct.ConditionStrategy#SOURCE_PARAMETERS)` 注解环绕，或者被 `Condition(appliesTo = ConditionStrategy#SOURCE_PARAMETERS)` 元环绕的方法
 
 例如，如果您只想在一个String类型的字段不能 `null` 或者空的时候才对其进行映射，那么您可以这样做：
 
-.Mapper using custom condition check method
+.Mapper using custom condition check method with `@TargetPropertyName` and `@SourcePropertyName`
 ====
 [source, java, linenums]
 [subs="verbatim,attributes"]
@@ -318,17 +321,30 @@ source存在性校验器的名字可以通过MapStruct的SPI来更改，此方�
 @Mapper
 public interface CarMapper {
 
-    CarDto carToCarDto(Car car);
+    @Mapping(target = "owner", source = "ownerName")
+    CarDto carToCarDto(Car car, @MappingTarget CarDto carDto);
 
     @Condition
-    default boolean isNotEmpty(String value) {
+    default boolean isNotEmpty(
+        String value,
+        @TargetPropertyName String targetPropertyName,
+        @SourcePropertyName String sourcePropertyName
+    ) {
+
+        if ( targetPropertyName.equals( "owner" )
+             && sourcePropertyName.equals( "ownerName" ) ) {
+
+           return value != null
+                    && !value.isEmpty()
+                    && !value.equals( value.toLowerCase() );
+        }
         return value != null && !value.isEmpty();
     }
 }
 ----
 ====
 
-生成的mapper会长成这样：
+生成的带 `@TargetPropertyName` 和 `@SourcePropertyName` 的mapper会长成这样：
 
 .Custom condition check in generated implementation
 ====
@@ -346,7 +362,7 @@ public class CarMapperImpl implements CarMapper {
 
         CarDto carDto = new CarDto();
 
-        if ( isNotEmpty( car.getOwner() ) ) {
+        if ( isNotEmpty( car.getOwner(), "owner", "ownerName" ) ) {
             carDto.setOwner( car.getOwner() );
         }
 
@@ -415,10 +431,62 @@ public class CarMapperImpl implements CarMapper {
 
 [NOTE]
 ====
-除了source属性的值之外，`@Condition` 所注释的方法也可以使用source参数作为入参。 
+除了source属性的值之外，`@Condition` 所注释的方法也可以使用source参数作为入参。
+
+`@TargetPropertyName` and `@SourcePropertyName` 参数仅能用在 `@Condition` 方法中.
 ====
 
-<<selection-based-on-qualifiers>>  中的内容对 `@Condition` 方法同样有效。如果需要更具体的可选方法，您需要使用 `Mapping#conditionQualifiedByName` 或者 `Mapping#conditionQualifiedBy`。
+<<selection-based-on-qualifiers>>  中的内容对 `@Condition` 方法同样有效。
+如果需要更具体的可选方法，您需要使用 `Mapping#conditionQualifiedByName` 或者 `Mapping#conditionQualifiedBy`。
+
+如果我们只想映射带id的cars，可以这么做：
+
+.Mapper using custom condition source parameter check method
+====
+[source, java, linenums]
+[subs="verbatim,attributes"]
+----
+@Mapper
+public interface CarMapper {
+
+    CarDto carToCarDto(Car car);
+
+    @SourceParameterCondition
+    default boolean hasCar(Car car) {
+        return car != null && car.getId() != null;
+    }
+}
+----
+====
+
+生成的mapper会长这样:
+
+.Custom condition source parameter check generated implementation
+====
+[source, java, linenums]
+[subs="verbatim,attributes"]
+----
+// GENERATED CODE
+public class CarMapperImpl implements CarMapper {
+
+    @Override
+    public CarDto carToCarDto(Car car) {
+        if ( !hasCar( car ) ) {
+            return null;
+        }
+
+        CarDto carDto = new CarDto();
+
+        carDto.setOwner( car.getOwner() );
+
+        // Mapping of other properties
+
+        return carDto;
+    }
+}
+----
+====
+
 
 [[exceptions]]
 === 异常

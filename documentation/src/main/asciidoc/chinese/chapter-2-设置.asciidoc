@@ -209,19 +209,18 @@ suppressGeneratorVersionInfoComment`
 支持的值如下：
 
 * `default`: mapper不用组件模式, 实例通常通过 `Mappers#getMapper(Class)` 检索。
-* `cdi`: 生成的mapper是一个应用范围的 CDI bean，可以通过 `@Inject` 检索 
+* `cdi`: 生成的mapper是一个应用范围 (来自 javax.enterprise.context 或者 jakarta.enterprise.context, 取决于javax.inject优先级下哪个可用) 的 CDI bean，可以通过 `@Inject` 检索
 * `spring`: 生成的mapper是一个单例Spring bean，可以通过 `@Autowired` 检索 
 * `jsr330`: 生成的mapper会有 {@code @Named} 注解，可以通过@Inject（该注解可来自javax.inject 或 jakarta.inject，取决于javax.inject设置下哪个优先级更高）检索，比如使用Spring的时候。
 * `jakarta`: 生成的mapper会有 {@code @Named} 注解，可以通过 `@@Inject` (该注解jakarta.inject)检索，比如使用Spring的时候。
+* `jakarta-cdi`: 生成的mapper是应用范围 (来自 jakarta.enterprise.context)的 CDI Bean，可通过 `@Inject` 检索
 
 在某个具体mapper中，如果以 `@Mapper#componentModel()` 的形式指定组件模式，则注解值的优先级更高。
 
 |`default`
 
 |`mapstruct.defaultInjectionStrategy`
-| 通过参数 `users` 注入到mapper里的类型。这一项需要基于CDI, Spring 或 JSR 330等基于注解的组件模式才能生效 
-
-通过参数 `users` 注入到mapper里的类型。这一项需要基于CDI, Spring 或 JSR 330组件模式才能生效
+| 通过参数 `uses` 注入到mapper里的类型。这一项需要基于CDI, Spring 或 JSR 330等基于注解的组件模式才能生效
 
 支持的值如下：
 
@@ -250,7 +249,7 @@ suppressGeneratorVersionInfoComment`
 |`WARN`
 
 |`mapstruct.unmappedSourcePolicy`
-|该值用来指定一个source值不能对应target对象的一个属性时的默认报警级别.
+|当一个source对象的属性和target对象的值不能匹配时，使用该值来指定默认报警级别.
 
 支持的值如下：
 
@@ -262,12 +261,37 @@ suppressGeneratorVersionInfoComment`
 
 在某个具体bean中，如果该策略以 `@BeanMapping#ignoreUnmappedSourceProperties()` 的形式指定，则注解的优先级要高于 `@Mapper#unmappedSourcePolicy()` 和配置选项的优先级
 
-|`WARN`
+|`IGNORE`
 
 |`mapstruct.
 disableBuilders`
 |如果被设置为“true”，MapStruct在映射时不会用builder模式。即相当于在所有mapper中添加@Mapper( builder = @Builder( disableBuilder = true ) )
 |`false`
+
+|`mapstruct.nullValueIterableMappingStrategy`
+|当迭代的映射过程中，有source值是 `null` 时，该策略就会被应用。
+
+支持的值有:
+
+* `RETURN_NULL`: 当source值是 `null` 时, 返回 `null`
+* `RETURN_DEFAULT`: 当source值是 `null` 时, 返回默认值（空集合）
+
+如果该策略与一个带 `@Mapper#nullValueIterableMappingStrategy()` 的mapper同时使用，注解值的优先级更高
+如果该策略与一个带 `@IterableMapping#nullValueMappingStrategy()` 的迭代映射同时使用，`@IterableMapping#nullValueMappingStrategy()`的优先级比 `@Mapper#nullValueIterableMappingStrategy()` 和策略选项优先级更高
+|`RETURN_NULL`
+
+|`mapstruct.nullValueMapMappingStrategy`
+|当map的映射过程中，有source值是 `null` 时，该策略就会被应用。
+
+支持的值有:
+
+* `RETURN_NULL`: 当source值是 `null` 时, 返回 `null`
+* `RETURN_DEFAULT`: 当source值是 `null` 时, 返回默认值（空map）
+
+如果该策略与一个带 `@Mapper#nullValueMapMappingStrategy()` 的mapper同时使用，注解值的优先级更高
+如果该策略与一个带 `@MapMapping#nullValueMappingStrategy()` 的具体map映射同时使用，`@MapMapping#nullValueMappingStrategy()`的优先级比 `@Mapper#nullValueMapMappingStrategy()` 和策略选项优先级更高
+
+|`RETURN_NULL`
 |===
 
 === 在java模块系统中使用MapStruct

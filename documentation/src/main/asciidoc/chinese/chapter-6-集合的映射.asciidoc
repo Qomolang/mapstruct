@@ -1,7 +1,7 @@
 [[mapping-collections]]
 == Mapping collections
 
-集合类型（List、Set等）的映射和bean类型的映射采用相同方式，都是在mapper接口中定义方法，并指定要映射的source类型和target类型。MapStruct支持来自 http://docs.oracle.com/javase/tutorial/collections/intro/index.html[Java Collection Framework] 中广泛的iterable类型。
+集合类型（`List`、`Set` 等）的映射和bean类型的映射采用相同方式，都是在mapper接口中定义方法，并指定要映射的source类型和target类型。MapStruct支持来自 http://docs.oracle.com/javase/tutorial/collections/intro/index.html[Java Collection Framework] 中广泛的iterable类型。
 
 生成的代码会包含source集合的一个循环遍历，在该循环中，每个元素都会先完成转换再塞到target集合中。MapStruct如果在该mapper中(或者该mapper使用的mapper中)发现有一个适用于该集合元素类型的映射方法，则会调用该方法完成映射。
 如果source元素类型和target元素类型之间存在隐式转换，则会执行该隐式转换。

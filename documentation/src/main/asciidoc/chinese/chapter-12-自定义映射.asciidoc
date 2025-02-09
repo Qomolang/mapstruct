@@ -148,7 +148,7 @@ private PersonMapper personMapper; // injects the decorator, with the injected o
 [[customizing-mappings-with-before-and-after]]
 === 带before-mapping和after-mapping方法的映射自定义
 
-装饰器模式无法满足全部的自定义mapper需求。比如，如果您不仅想对某几个方法进行自定义，而是要对所有具有某种特征的方法进行自定义。此时，您可以使用 *回调* 方法，回调方法会在映射开始前/结束后被调用。
+装饰器模式无法满足全部的自定义mapper需求。比如，如果您不仅想对某几个方法进行自定义，而是要对所有具有某种特征的方法进行自定义。此时，您可以使用 *回调方法*，回调方法会在映射开始前/结束后被调用。
 
 您可以在抽象mapper自身中实现回调方法，也可以 `Mapper#uses` 中的类型接口里实现回调方法，还可以在 `@Context` 参数的类中实现回调方法。
 
@@ -264,4 +264,11 @@ public class VehicleMapperImpl extends VehicleMapper {
 
 *重要:* 单参数方法的执行顺序不能保证，这取决于编译器和系统。
 
-*重要:* 当使用builder时，`@AfterMapping` 方法必须将该builder作为带 `@MappingTarget` 的参数使用，这样该方法才能修改要构建的方法。其 `build` 方法会在 `@AfterMapping` 方法结束时调用。当真正的target被用作带 `@MappingTarget` 的参数时，MapStruct不会调用 `@AfterMapping` 方法。
+[NOTE]
+====
+Before/After-mapping方法也可以使用builder:
+
+* 带 `@MappingTarget` 参数的 `@BeforeMapping` 方法不会被调用，因为 `@MappingTarget` 参数指定了真正的target，只有方法已经执行后才能确定
+* 为了能修改将要构建的对象，带`@AfterMapping`的方法必须有带 `@MappingTarget` 的参数的builder。当带 `@AfterMapping` 方法的作用域执行完毕时，就会调用 `build` 方法
+* `@AfterMapping` 环绕的方法也可以有真正的target，比如`@TargetType` 或者 `@MappingTarget`。会在真正的target构建后被调用（首先是带 `@TargetType` 的方法，其次是带 `@MappingTarget` 的方法）
+====

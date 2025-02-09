@@ -19,19 +19,7 @@ MapStruct会自动处理很多种类型转换。
 
 [WARNING]
 ====
-
 较长型转换为较短型时（比如 `long` 型转化为 `int` 型）会导致精度损失。`Mapper` 和 `MapperConfig` 注解中有一个方法 `typeConversionPolicy`，该方法可以控制此种情况下是打warning还是error。因为要保持向后兼容，所以目前的默认值是 `ReportingPolicy.IGNORE`。
-
-====
-
-* 所有的java原生数据类型和对应的包装类之间。比如 `int` 和 `Integer` ，`boolean` 和 `Boolean` 等。生成的代码是 `null` 敏感的。比如把一个包装类转换为对应的原生类型时，会先有一个 `null` 值校验。
-* 所有的java原生数字类型和数字包装类之间。比如 `int`、`long`、`byte` 和 `Integer` 之间的转换。
-
-[WARNING]
-====
-
-较长型转换为较短型时（比如 `long` 型转化为 `int` 型）会导致精度损失。`Mapper` 和 `MapperConfig` 注解中有一个方法 `typeConversionPolicy`，该方法可以控制此种情况下是打warning还是error。因为要保持向后兼容，所以目前的默认值是 `ReportingPolicy.IGNORE`。
-
 ====
 
 * 所有的java原生类型（及其包装类）与 `String` 之间。比如 `int` 和 `String` 之间 或者 `Boolean` 和 `String` 之间。可以指定为符合 `java.text.DecimalFormat` 格式的格式化字符串。
@@ -166,8 +154,6 @@ public interface CarMapper {
 这种方法可以映射任意深度的对象图（object graphs）。当把Entity映射为DTO时，您可能经常需要把引用指向别的对象。您可以通过自定义映射（见下节）实现这一点，比如把一个entity映射为它的id。
 
 当生成映射方法的实现时，对于每一对对应的source和target字段，MapStruct会依次执行以下操作：
-
-When generating the implementation of a mapping method, MapStruct will apply the following routine for each attribute pair in the source and target object:
 
 . 如果source字段和target字段是相同的类型，则MapStruct就会简单地把值从source *直接* 复制到target上。如果source字段是一个集合(比如 `List`)，那么target字段会被设置为该集合的一个拷贝(译注：集合本身是深拷贝，里面的元素为浅拷贝)。
 . 如果source字段和target字段是不同的类型，则检查是否已经存在一个 以source字段类型作为入参 并且 以target字段类型作为出参的 *映射方法*。如果存在，则调用该方法完成映射。
@@ -673,7 +659,7 @@ public class Titles {
 
 [TIP]
 ====
-同样的机制也适用于beam映射: `@BeanMapping#qualifiedBy`: 您可以通过指定qualifier选择工厂方法。
+同样的机制也适用于bean映射: `@BeanMapping#qualifiedBy`: 您可以通过指定qualifier选择工厂方法。
 ====
 
 在许多场合中，用户想完成的事情相对简答，而声明一个新注解无疑是很重的一个方式。这种情况下，您可以使用MapStruct的 `@Named` 注解。该注解是一个预定义的qualifier（本身包含 `@Qualifier` ），可以用来给Mapper类或者映射方法命名。请看下面的例子：
@@ -720,7 +706,7 @@ public interface MovieMapper {
 
 ====
 
-=== Combining qualifiers with defaults
+=== 带默认值的qualifiers
 
 请注意，`Mapping#defaultValue` 本质上是一个 `String`，需要被转换为 `Mapping#target`。提供`Mapping#qualifiedByName` 或者 `Mapping#qualifiedBy` 会强制让MapStruct使用该方法。如果您希望 `Mapping#defaultValue` 有不同的行为，请提供合适的映射方法。该映射方法需要把 `String` 转换为 `Mapping#target` 期望的类型，同时也需要加上注解以使得 `Mapping#qualifiedByName` 或者 `Mapping#qualifiedBy` 注解能够发现它。
 

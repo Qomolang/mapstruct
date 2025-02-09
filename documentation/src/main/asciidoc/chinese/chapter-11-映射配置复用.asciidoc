@@ -161,7 +161,7 @@ public interface SourceTargetMapper {
 
 当方法级别的映射配置注解由接口中的原型方法继承而来，`@Mapper#mappingInheritanceStrategy()` / `@MapperConfig#mappingInheritanceStrategy()` 属性会配置为mapper中的方法配置：
 
-* `EXPLICIT` （默认）：如果target映射方法有@InheritConfiguration注解，并且source类型是原型方法source类型的子类，target类型也是原型方法中target类型的子类（详见 <<mapping-configuration-inheritance>> ），那么仅配置会被继承。
+* `EXPLICIT` （默认）：如果target映射方法有 `@InheritConfiguration` 注解，并且source类型是原型方法source类型的子类，target类型也是原型方法中target类型的子类（详见 <<mapping-configuration-inheritance>> ），那么仅配置会被继承。
 * `AUTO_INHERIT_FROM_CONFIG` ：如果source类型是原型方法source类型的子类，target类型也是原型方法中target类型的子类，那么配置会被自动继承。如果有多个匹配的原型方法，请通过 `@InheritConfiguration(name = ...)`  来消除歧义，该项同时会导致 `AUTO_INHERIT_FROM_CONFIG` 失效
 * `AUTO_INHERIT_REVERSE_FROM_CONFIG` ：如果source类型是原型方法source类型的子类，target类型也是原型方法中target类型的子类，那么逆配置会被自动继承。如果有多个匹配的原型方法，请通过 `@InheritConfiguration(name = ...)`  来消除歧义，该项同时会导致 `AUTO_INHERIT_REVERSE_FROM_CONFIG` 失效。
 * `AUTO_INHERIT_ALL_FROM_CONFIG` ：配置和逆配置都会被自动继承。`AUTO_INHERIT_FROM_CONFIG` 或  `AUTO_INHERIT_REVERSE_FROM_CONFIG` 的规则也适用于这里。

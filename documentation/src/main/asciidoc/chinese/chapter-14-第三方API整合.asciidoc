@@ -45,8 +45,10 @@ public @interface Default {
 MapStruct能够和 https://projectlombok.org/[Lombok] 一起使用，比如MapStruct 1.2.0.Beta1 和 Lombok 1.16.14。
 
 MapStruct会利用生成的getters, setters, 和constructors，并且用它们来生成mapper实现。
+请记住，Lombok生成的代码可能不会总是和这些独立映射的预期相符
+在这种情况下，要么必须更改 Mapstruct 映射，要么必须依照 https://projectlombok.org/features/configuration[`lombok.config`] 对 Lombok 进行相应配置，以实现相互协同。
 
-[NOTE]
+[WARNING]
 ====
 Lombok 1.18.16有一个破坏式改新（https://projectlombok.org/changelog[changelog]）。
 为了让Lombok和MapStruct一起工作，您必须添加一个额外的注解处理器 `lombok-mapstruct-binding` (https://mvnrepository.com/artifact/org.projectlombok/lombok-mapstruct-binding[Maven])。

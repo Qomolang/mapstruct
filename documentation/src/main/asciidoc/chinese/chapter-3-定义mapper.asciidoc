@@ -127,7 +127,7 @@ MapStruct生成代码的哲学是：尽量让生成的代码和手写的代码�
 MapStruct会考虑source类和target类中的所有公共字段，包括其父类中的字段。
 
 [[mapping-composition]]
-=== Mapping Composition (experimental)
+=== Mapping Composition
 
 MapStruct支持元注解。
 
@@ -169,7 +169,7 @@ public interface StorageMapper {
 
 但是，`ShelveEntity` 和 `BoxEntity` 确实有一些公共字段。`@ToEntity` 假定 `ShelveEntity` 和 `BoxEntity` 都拥有字段：`"id"`, `"creationDate"` 和 `"name"`。其进一步假定作为source bean的 `ShelveDto` 和 `BoxDto` 都有 `"groupName"` 字段。此概念也被人称为“鸭子类型”，如果一个东西叫起来像鸭子，走起来像鸭子，那它可以当鸭子对待。
 
-此功能仍处于试验阶段。报错信息还不成熟：出问题的方法以及 `@Mapping` 注解中的相关值都会显示出来，但是，组合的切面是不可见的。错误消息对应的情况就像是 `@Mapping` 是直接加在相关的方法上一样。
+报错信息还不成熟：出问题的方法以及 `@Mapping` 注解中的相关值都会显示出来，但是，组合的切面是不可见的。错误消息对应的情况就像是 `@Mapping` 是直接加在相关的方法上一样。
 
 因此，用户应该小心使用该特性，特别是在不确定一个字段是否会始终存在的情况下。
 
@@ -348,7 +348,7 @@ MapStruct也支持没有getters/setters方法的public字段的映射。
 
 当一个字段被标为 `public` 或者 `public final` 时，该字段会被认为是一个读访问器。当一个字段被标为 `static` 时，该字段就不再被当成读访问器。
 
-仅当一个字段被标为 `public` 时，该字段会被认为是一个读访问器。当一个字段被标为 `final` 或 `static` 时，该字段就不再被当成读访问器。
+仅当一个字段被标为 `public` 时，该字段会被认为是一个写访问器。当一个字段被标为 `final` 或 `static` 时，该字段就不再被当成写访问器。
 
 举个小例子：
 

@@ -16,7 +16,7 @@
 
 MapStruct实质上是一个注解处理器，其目标是生成类型安全、性能良好并且完全无三方依赖的bean映射代码。
 
-该指南包含Mapstruct的全部功能。如果该指南没有解答您所有的疑问，请加入MapStruct的 https://groups.google.com/forum/?fromgroups#!forum/mapstruct-users[谷歌小组]以寻求帮助。
+该指南包含Mapstruct的全部功能。如果该指南没有解答您所有的疑问，请加入MapStruct的 https://github.com/mapstruct/mapstruct/discussions[GitHub 讨论] 以寻求帮助。
 
 如果您发现了一个错误（拼写错误亦可），请提issue至 https://github.com/mapstruct/mapstruct[MapStruct仓库]，如果可能的话，当然直接提个pr帮社区修正掉更好。
 
@@ -25,6 +25,8 @@ MapStruct实质上是一个注解处理器，其目标是生成类型安全、�
 
 [[中译前言]]
 == 中译前言
+中译版的内容可能有更新不及时的问题，如果遇到行为不符合预期或者部分期望功能没有的情况，请参照英文版获取最新内容
+
 为了更加通顺和符合技术人习惯，本文并不追求全汉字翻译，未翻译部分及其中部分对照如下：
 
 bean：java特有概念 不翻译
