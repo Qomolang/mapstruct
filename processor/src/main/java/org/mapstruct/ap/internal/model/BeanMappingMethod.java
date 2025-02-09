@@ -152,7 +152,7 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
             method( forgedMethod );
             mappingReferences = forgedMethod.getMappingReferences();
             Parameter sourceParameter = first( Parameter.getSourceParameters( forgedMethod.getParameters() ) );
-            for ( MappingReference mappingReference: mappingReferences.getMappingReferences() ) {
+            for ( MappingReference mappingReference : mappingReferences.getMappingReferences() ) {
                 SourceReference sourceReference = mappingReference.getSourceReference();
                 if ( sourceReference != null ) {
                     mappingReference.setSourceReference( new SourceReference.BuilderFromSourceReference()
@@ -284,15 +284,22 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
 
             initializeMappingReferencesIfNeeded( resultTypeToMap );
 
-            // map properties with mapping
-            boolean mappingErrorOccurred = handleDefinedMappings( resultTypeToMap );
-            if ( mappingErrorOccurred ) {
-                return null;
+            boolean shouldHandledDefinedMappings = shouldHandledDefinedMappings( resultTypeToMap );
+
+
+            if ( shouldHandledDefinedMappings ) {
+                // map properties with mapping
+                boolean mappingErrorOccurred = handleDefinedMappings( resultTypeToMap );
+                if ( mappingErrorOccurred ) {
+                    return null;
+                }
             }
 
-            boolean applyImplicitMappings = !mappingReferences.isRestrictToDefinedMappings();
+            // If defined mappings should not be handled then we should not apply implicit mappings
+            boolean applyImplicitMappings =
+                shouldHandledDefinedMappings && !mappingReferences.isRestrictToDefinedMappings();
             if ( applyImplicitMappings ) {
-                applyImplicitMappings = beanMapping == null || !beanMapping.isignoreByDefault();
+                applyImplicitMappings = beanMapping == null || !beanMapping.isIgnoredByDefault();
             }
             if ( applyImplicitMappings ) {
 
@@ -314,8 +321,10 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
             handleUnmappedConstructorProperties();
 
             // report errors on unmapped properties
-            reportErrorForUnmappedTargetPropertiesIfRequired();
-            reportErrorForUnmappedSourcePropertiesIfRequired();
+            if ( shouldHandledDefinedMappings ) {
+                reportErrorForUnmappedTargetPropertiesIfRequired();
+                reportErrorForUnmappedSourcePropertiesIfRequired();
+            }
             reportErrorForMissingIgnoredSourceProperties();
             reportErrorForUnusedSourceParameters();
 
@@ -399,10 +408,29 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                     existingVariableNames
                 ) );
 
-                // remove methods without parameters as they are already being invoked
-                removeMappingReferencesWithoutSourceParameters( beforeMappingReferencesWithFinalizedReturnType );
-                removeMappingReferencesWithoutSourceParameters( afterMappingReferencesWithFinalizedReturnType );
+                keepMappingReferencesUsingTarget( beforeMappingReferencesWithFinalizedReturnType, actualReturnType );
+                keepMappingReferencesUsingTarget( afterMappingReferencesWithFinalizedReturnType, actualReturnType );
             }
+
+            Map<String, PresenceCheck> presenceChecksByParameter = new LinkedHashMap<>();
+            for ( Parameter sourceParameter : method.getSourceParameters() ) {
+                PresenceCheck parameterPresenceCheck = PresenceCheckMethodResolver.getPresenceCheckForSourceParameter(
+                    method,
+                    selectionParameters,
+                    sourceParameter,
+                    ctx
+                );
+                if ( parameterPresenceCheck != null ) {
+                    presenceChecksByParameter.put( sourceParameter.getName(), parameterPresenceCheck );
+                }
+                else if ( !sourceParameter.getType().isPrimitive() ) {
+                    presenceChecksByParameter.put(
+                        sourceParameter.getName(),
+                        new NullPresenceCheck( sourceParameter.getName() )
+                    );
+                }
+            }
+
 
             return new BeanMappingMethod(
                 method,
@@ -419,12 +447,37 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                 afterMappingReferencesWithFinalizedReturnType,
                 finalizeMethod,
                 mappingReferences,
-                subclasses
+                subclasses,
+                presenceChecksByParameter
             );
         }
 
-        private void removeMappingReferencesWithoutSourceParameters(List<LifecycleCallbackMethodReference> references) {
-            references.removeIf( r -> r.getSourceParameters().isEmpty() && r.getReturnType().isVoid() );
+        private void keepMappingReferencesUsingTarget(List<LifecycleCallbackMethodReference> references, Type type) {
+            references.removeIf( reference -> {
+                List<ParameterBinding> bindings = reference.getParameterBindings();
+                if ( bindings.isEmpty() ) {
+                    return true;
+                }
+                for ( ParameterBinding binding : bindings ) {
+                    if ( binding.isMappingTarget() ) {
+                        if ( type.isAssignableTo( binding.getType() ) ) {
+                            // If the mapping target matches the type then we need to keep this
+                            return false;
+                        }
+                    }
+                    else if ( binding.isTargetType() ) {
+                        Type targetType = binding.getType();
+                        List<Type> targetTypeTypeParameters = targetType.getTypeParameters();
+                        if ( targetTypeTypeParameters.size() == 1 ) {
+                            if ( type.isAssignableTo( targetTypeTypeParameters.get( 0 ) ) ) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+
+                return true;
+            } );
         }
 
         private boolean doesNotAllowAbstractReturnTypeAndCanBeConstructed(Type returnTypeImpl) {
@@ -1046,6 +1099,36 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
         }
 
         /**
+         * Determine whether defined mappings should be handled on the result type.
+         * They should be, if any of the following is true:
+         * <ul>
+         *     <li>The {@code resultTypeToMap} is not abstract</li>
+         *     <li>There is a factory method</li>
+         *     <li>The method is an update method</li>
+         * </ul>
+         * Otherwise, it means that we have reached this because subclass mappings are being used
+         * and the chosen strategy is runtime exception.
+         *
+         * @param resultTypeToMap the type in which the defined target properties are defined
+         * @return {@code true} if defined mappings should be handled for the result type, {@code false} otherwise
+         */
+        private boolean shouldHandledDefinedMappings(Type resultTypeToMap) {
+            if ( !resultTypeToMap.isAbstract() ) {
+                return true;
+            }
+
+            if ( hasFactoryMethod ) {
+                return true;
+            }
+
+            if ( method.isUpdateMethod() ) {
+                return true;
+            }
+
+            return false;
+        }
+
+        /**
          * Iterates over all defined mapping methods ({@code @Mapping(s)}), either directly given or inherited from the
          * inverse mapping method.
          * <p>
@@ -1281,7 +1364,7 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                 handledTargets.add( targetPropertyName );
             }
 
-            // its a constant
+            // it's a constant
             // if we have an unprocessed target that means that it most probably is nested and we should
             // not generated any mapping for it now. Eventually it will be done though
             else if ( mapping.getConstant() != null ) {
@@ -1301,7 +1384,7 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                 handledTargets.add( targetPropertyName );
             }
 
-            // its an expression
+            // it's an expression
             // if we have an unprocessed target that means that it most probably is nested and we should
             // not generated any mapping for it now. Eventually it will be done though
             else if ( mapping.getJavaExpression() != null ) {
@@ -1317,7 +1400,7 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                     .build();
                 handledTargets.add( targetPropertyName );
             }
-            // its a plain-old property mapping
+            // it's a plain-old property mapping
             else  {
 
                 SourceReference sourceRef = mappingRef.getSourceReference();
@@ -1522,6 +1605,7 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                 MappingReferences mappingRefs = extractMappingReferences( targetPropertyName, false );
                 PropertyMapping propertyMapping = new PropertyMappingBuilder().mappingContext( ctx )
                     .sourceMethod( method )
+                    .sourcePropertyName( targetPropertyName )
                     .target( targetPropertyName, targetPropertyReadAccessor, targetPropertyWriteAccessor )
                     .sourceReference( sourceRef )
                     .existingVariableNames( existingVariableNames )
@@ -1638,7 +1722,7 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                 return ReportingPolicyGem.IGNORE;
             }
             // If we have ignoreByDefault = true, unprocessed target properties are not an issue.
-            if ( method.getOptions().getBeanMapping().isignoreByDefault() ) {
+            if ( method.getOptions().getBeanMapping().isIgnoredByDefault() ) {
                 return ReportingPolicyGem.IGNORE;
             }
             if ( method.getOptions().getBeanMapping() != null ) {
@@ -1682,53 +1766,21 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
             }
             else if ( !unprocessedTargetProperties.isEmpty() && unmappedTargetPolicy.requiresReport() ) {
 
-                if ( !( method instanceof ForgedMethod ) ) {
-                    Message msg = unmappedTargetPolicy.getDiagnosticKind() == Diagnostic.Kind.ERROR ?
-                        Message.BEANMAPPING_UNMAPPED_TARGETS_ERROR : Message.BEANMAPPING_UNMAPPED_TARGETS_WARNING;
-                    Object[] args = new Object[] {
-                        MessageFormat.format(
-                            "{0,choice,1#property|1<properties}: \"{1}\"",
-                            unprocessedTargetProperties.size(),
-                            Strings.join( unprocessedTargetProperties.keySet(), ", " )
-                        )
-                    };
+                Message unmappedPropertiesMsg;
+                Message unmappedForgedPropertiesMsg;
+                if ( unmappedTargetPolicy.getDiagnosticKind() == Diagnostic.Kind.ERROR ) {
+                    unmappedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_TARGETS_ERROR;
+                    unmappedForgedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_FORGED_TARGETS_ERROR;
+                }
+                else {
+                    unmappedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_TARGETS_WARNING;
+                    unmappedForgedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_FORGED_TARGETS_WARNING;
+                }
 
-                    ctx.getMessager().printMessage(
-                        method.getExecutable(),
-                        msg,
-                        args
-                    );
-                }
-                else if ( !ctx.isErroneous() ) {
-                    Message msg = unmappedTargetPolicy.getDiagnosticKind() == Diagnostic.Kind.ERROR ?
-                        Message.BEANMAPPING_UNMAPPED_FORGED_TARGETS_ERROR :
-                        Message.BEANMAPPING_UNMAPPED_FORGED_TARGETS_WARNING;
-                    String sourceErrorMessage = method.getParameters().get( 0 ).getType().describe();
-                    String targetErrorMessage = method.getReturnType().describe();
-                    if ( ( (ForgedMethod) method ).getHistory() != null ) {
-                        ForgedMethodHistory history = ( (ForgedMethod) method ).getHistory();
-                        sourceErrorMessage = history.createSourcePropertyErrorMessage();
-                        targetErrorMessage = MessageFormat.format(
-                            "\"{0} {1}\"",
-                            history.getTargetType().describe(),
-                            history.createTargetPropertyName()
-                        );
-                    }
-                    Object[] args = new Object[] {
-                        MessageFormat.format(
-                            "{0,choice,1#property|1<properties}: \"{1}\"",
-                            unprocessedTargetProperties.size(),
-                            Strings.join( unprocessedTargetProperties.keySet(), ", " )
-                        ),
-                        sourceErrorMessage,
-                        targetErrorMessage
-                    };
-                    ctx.getMessager().printMessage(
-                        method.getExecutable(),
-                        msg,
-                        args
-                    );
-                }
+                reportErrorForUnmappedProperties(
+                    unprocessedTargetProperties,
+                    unmappedPropertiesMsg,
+                    unmappedForgedPropertiesMsg );
 
             }
         }
@@ -1737,31 +1789,72 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
             if ( mappingReferences.isForForgedMethods() ) {
                 return ReportingPolicyGem.IGNORE;
             }
-            // If we have ignoreByDefault = true, unprocessed source properties are not an issue.
-            if ( method.getOptions().getBeanMapping().isignoreByDefault() ) {
-                return ReportingPolicyGem.IGNORE;
-            }
             return method.getOptions().getBeanMapping().unmappedSourcePolicy();
         }
 
         private void reportErrorForUnmappedSourcePropertiesIfRequired() {
             ReportingPolicyGem unmappedSourcePolicy = getUnmappedSourcePolicy();
-
             if ( !unprocessedSourceProperties.isEmpty() && unmappedSourcePolicy.requiresReport() ) {
+                Message unmappedPropertiesMsg;
+                Message unmappedForgedPropertiesMsg;
+                if ( unmappedSourcePolicy.getDiagnosticKind() == Diagnostic.Kind.ERROR ) {
+                    unmappedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_SOURCES_ERROR;
+                    unmappedForgedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_FORGED_SOURCES_ERROR;
+                }
+                else {
+                    unmappedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_SOURCES_WARNING;
+                    unmappedForgedPropertiesMsg = Message.BEANMAPPING_UNMAPPED_FORGED_SOURCES_WARNING;
+                }
 
-                Message msg = unmappedSourcePolicy.getDiagnosticKind() == Diagnostic.Kind.ERROR ?
-                    Message.BEANMAPPING_UNMAPPED_SOURCES_ERROR : Message.BEANMAPPING_UNMAPPED_SOURCES_WARNING;
+                reportErrorForUnmappedProperties(
+                    unprocessedSourceProperties,
+                    unmappedPropertiesMsg,
+                    unmappedForgedPropertiesMsg );
+            }
+        }
+
+        private void reportErrorForUnmappedProperties(Map<String, Accessor> unmappedProperties,
+                                                                Message unmappedPropertiesMsg,
+                                                                Message unmappedForgedPropertiesMsg) {
+            if ( !( method instanceof ForgedMethod ) ) {
                 Object[] args = new Object[] {
                     MessageFormat.format(
                         "{0,choice,1#property|1<properties}: \"{1}\"",
-                        unprocessedSourceProperties.size(),
-                        Strings.join( unprocessedSourceProperties.keySet(), ", " )
+                        unmappedProperties.size(),
+                        Strings.join( unmappedProperties.keySet(), ", " )
                     )
                 };
 
                 ctx.getMessager().printMessage(
                     method.getExecutable(),
-                    msg,
+                    unmappedPropertiesMsg,
+                    args
+                );
+            }
+            else if ( !ctx.isErroneous() ) {
+                String sourceErrorMessage = method.getParameters().get( 0 ).getType().describe();
+                String targetErrorMessage = method.getReturnType().describe();
+                if ( ( (ForgedMethod) method ).getHistory() != null ) {
+                    ForgedMethodHistory history = ( (ForgedMethod) method ).getHistory();
+                    sourceErrorMessage = history.createSourcePropertyErrorMessage();
+                    targetErrorMessage = MessageFormat.format(
+                        "\"{0} {1}\"",
+                        history.getTargetType().describe(),
+                        history.createTargetPropertyName()
+                    );
+                }
+                Object[] args = new Object[] {
+                    MessageFormat.format(
+                        "{0,choice,1#property|1<properties}: \"{1}\"",
+                        unmappedProperties.size(),
+                        Strings.join( unmappedProperties.keySet(), ", " )
+                    ),
+                    sourceErrorMessage,
+                    targetErrorMessage
+                };
+                ctx.getMessager().printMessage(
+                    method.getExecutable(),
+                    unmappedForgedPropertiesMsg,
                     args
                 );
             }
@@ -1840,7 +1933,8 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
                               List<LifecycleCallbackMethodReference> afterMappingReferencesWithFinalizedReturnType,
                               MethodReference finalizerMethod,
                               MappingReferences mappingReferences,
-                              List<SubclassMapping> subclassMappings) {
+                              List<SubclassMapping> subclassMappings,
+                              Map<String, PresenceCheck> presenceChecksByParameter) {
         super(
             method,
             annotations,
@@ -1872,18 +1966,12 @@ public class BeanMappingMethod extends NormalTypeMappingMethod {
         // parameter mapping.
         this.mappingsByParameter = new HashMap<>();
         this.constantMappings = new ArrayList<>( propertyMappings.size() );
-        this.presenceChecksByParameter = new LinkedHashMap<>();
+        this.presenceChecksByParameter = presenceChecksByParameter;
         this.constructorMappingsByParameter = new LinkedHashMap<>();
         this.constructorConstantMappings = new ArrayList<>();
         Set<String> sourceParameterNames = new HashSet<>();
         for ( Parameter sourceParameter : getSourceParameters() ) {
             sourceParameterNames.add( sourceParameter.getName() );
-            if ( !sourceParameter.getType().isPrimitive() ) {
-                presenceChecksByParameter.put(
-                    sourceParameter.getName(),
-                    new NullPresenceCheck( sourceParameter.getName() )
-                );
-            }
         }
         for ( PropertyMapping mapping : propertyMappings ) {
             if ( mapping.isConstructorMapping() ) {

@@ -163,6 +163,45 @@ public class SelectionContext {
         );
     }
 
+    public static SelectionContext forSourceParameterPresenceCheckMethods(Method mappingMethod,
+                                                                          SelectionParameters selectionParameters,
+                                                                          Parameter sourceParameter,
+                                                                          TypeFactory typeFactory) {
+        SelectionCriteria criteria = SelectionCriteria.forSourceParameterCheckMethods( selectionParameters );
+        Type booleanType = typeFactory.getType( Boolean.class );
+        return new SelectionContext(
+            null,
+            criteria,
+            mappingMethod,
+            booleanType,
+            booleanType,
+            () -> getParameterBindingsForSourceParameterPresenceCheck(
+                mappingMethod,
+                booleanType,
+                sourceParameter,
+                typeFactory
+            )
+        );
+    }
+
+    private static List<ParameterBinding> getParameterBindingsForSourceParameterPresenceCheck(Method method,
+                                                                                              Type targetType,
+                                                                                              Parameter sourceParameter,
+                                                                                              TypeFactory typeFactory) {
+
+        List<ParameterBinding> availableParams = new ArrayList<>( method.getParameters().size() + 3 );
+
+        availableParams.add( ParameterBinding.fromParameter( sourceParameter ) );
+        availableParams.add( ParameterBinding.forTargetTypeBinding( typeFactory.classTypeOf( targetType ) ) );
+        for ( Parameter parameter : method.getParameters() ) {
+            if ( !parameter.isSourceParameter( ) ) {
+                availableParams.add( ParameterBinding.fromParameter( parameter ) );
+            }
+        }
+
+        return availableParams;
+    }
+
     private static List<ParameterBinding> getAvailableParameterBindingsFromMethod(Method method, Type targetType,
                                                                                   SourceRHS sourceRHS,
                                                                                   TypeFactory typeFactory) {
@@ -171,6 +210,7 @@ public class SelectionContext {
         if ( sourceRHS != null ) {
             availableParams.addAll( ParameterBinding.fromParameters( method.getParameters() ) );
             availableParams.add( ParameterBinding.fromSourceRHS( sourceRHS ) );
+            addSourcePropertyNameBindings( availableParams, sourceRHS.getSourceType(), typeFactory );
         }
         else {
             availableParams.addAll( ParameterBinding.fromParameters( method.getParameters() ) );
@@ -189,6 +229,7 @@ public class SelectionContext {
         List<ParameterBinding> availableParams = new ArrayList<>();
 
         availableParams.add( ParameterBinding.forSourceTypeBinding( sourceType ) );
+        addSourcePropertyNameBindings( availableParams, sourceType, typeFactory );
 
         for ( Parameter param : mappingMethod.getParameters() ) {
             if ( param.isMappingContext() ) {
@@ -199,6 +240,22 @@ public class SelectionContext {
         addTargetRelevantBindings( availableParams, targetType, typeFactory );
 
         return availableParams;
+    }
+
+    private static void addSourcePropertyNameBindings(List<ParameterBinding> availableParams, Type sourceType,
+                                                      TypeFactory typeFactory) {
+
+        boolean sourcePropertyNameAvailable = false;
+        for ( ParameterBinding pb : availableParams ) {
+            if ( pb.isSourcePropertyName() ) {
+                sourcePropertyNameAvailable = true;
+                break;
+            }
+        }
+        if ( !sourcePropertyNameAvailable ) {
+            availableParams.add( ParameterBinding.forSourcePropertyNameBinding( typeFactory.getType( String.class ) ) );
+        }
+
     }
 
     /**

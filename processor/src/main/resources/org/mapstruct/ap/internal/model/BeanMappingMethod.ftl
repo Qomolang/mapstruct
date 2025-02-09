@@ -116,7 +116,7 @@
                 </#list>
             </#if>
         </#list>
-    <#else>
+    <#elseif !propertyMappingsByParameter(sourceParameters[0]).empty>
         <#if mapNullToDefault>if ( <@includeModel object=getPresenceCheckByParameter(sourceParameters[0]) /> ) {</#if>
         <#list propertyMappingsByParameter(sourceParameters[0]) as propertyMapping>
             <@includeModel object=propertyMapping targetBeanName=resultName existingInstanceMapping=existingInstanceMapping defaultValueAssignment=propertyMapping.defaultValueAssignment/>
@@ -136,7 +136,7 @@
 
     <#if finalizerMethod??>
         <#if (afterMappingReferencesWithFinalizedReturnType?size > 0)>
-            ${returnType.name} ${finalizedResultName} = ${resultName}.<@includeModel object=finalizerMethod />;
+            <@includeModel object=returnType /> ${finalizedResultName} = ${resultName}.<@includeModel object=finalizerMethod />;
 
             <#list afterMappingReferencesWithFinalizedReturnType as callback>
                 <#if callback_index = 0>

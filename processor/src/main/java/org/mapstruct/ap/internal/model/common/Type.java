@@ -50,7 +50,7 @@ import org.mapstruct.ap.internal.util.Nouns;
 import org.mapstruct.ap.internal.util.TypeUtils;
 import org.mapstruct.ap.internal.util.accessor.Accessor;
 import org.mapstruct.ap.internal.util.accessor.AccessorType;
-import org.mapstruct.ap.internal.util.accessor.FieldElementAccessor;
+import org.mapstruct.ap.internal.util.accessor.ElementAccessor;
 import org.mapstruct.ap.internal.util.accessor.MapValueAccessor;
 import org.mapstruct.ap.internal.util.accessor.PresenceCheckAccessor;
 import org.mapstruct.ap.internal.util.accessor.ReadAccessor;
@@ -821,17 +821,21 @@ public class Type extends ModelElement implements Comparable<Type> {
                     candidate = adderMethod;
                 }
 
-                if ( cmStrategy == CollectionMappingStrategyGem.TARGET_IMMUTABLE
-                    && candidate.getAccessorType() == AccessorType.GETTER ) {
-                    // If the collection mapping strategy is target immutable
-                    // then the getter method cannot be used as a setter
-                    continue;
-                }
             }
             else if ( candidate.getAccessorType() == AccessorType.FIELD  && ( Executables.isFinal( candidate ) ||
                 result.containsKey( targetPropertyName ) ) ) {
                 // if the candidate is a field and a mapping already exists, then use that one, skip it.
                 continue;
+            }
+
+            if ( candidate.getAccessorType() == AccessorType.GETTER ) {
+                // When the candidate is a getter then it can't be used in the following cases:
+                // 1. The collection mapping strategy is target immutable
+                // 2. The target type is a stream (streams are immutable)
+                if ( cmStrategy == CollectionMappingStrategyGem.TARGET_IMMUTABLE ||
+                    targetType != null && targetType.isStreamType() ) {
+                    continue;
+                }
             }
 
             Accessor previousCandidate = result.get( targetPropertyName );
@@ -1043,7 +1047,7 @@ public class Type extends ModelElement implements Comparable<Type> {
             List<Accessor> setterMethods = getSetters();
             List<Accessor> readAccessors = new ArrayList<>( getPropertyReadAccessors().values() );
             // All the fields are also alternative accessors
-            readAccessors.addAll( filters.fieldsIn( getAllFields(), FieldElementAccessor::new ) );
+            readAccessors.addAll( filters.fieldsIn( getAllFields(), ElementAccessor::new ) );
 
             // there could be a read accessor (field or  method) for a list/map that is not present as setter.
             // an accessor could substitute the setter in that case and act as setter.
