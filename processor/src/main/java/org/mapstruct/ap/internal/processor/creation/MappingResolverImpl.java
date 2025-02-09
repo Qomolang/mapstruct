@@ -434,7 +434,6 @@ public class MappingResolverImpl implements MappingResolver {
         private ConversionAssignment resolveViaConversion(Type sourceType, Type targetType) {
 
             ConversionProvider conversionProvider = conversions.getConversion( sourceType, targetType );
-
             if ( conversionProvider == null ) {
                 return null;
             }
@@ -471,6 +470,9 @@ public class MappingResolverImpl implements MappingResolver {
         }
 
         private boolean isCandidateForMapping(Method methodCandidate) {
+            if ( methodCandidate.getConditionOptions().isAnyStrategyApplicable() ) {
+                return false;
+            }
             return isCreateMethodForMapping( methodCandidate ) || isUpdateMethodForMapping( methodCandidate );
         }
 

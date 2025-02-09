@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import javax.lang.model.element.AnnotationMirror;
 
 import org.mapstruct.ap.internal.gem.BuilderGem;
@@ -70,6 +71,7 @@ import static org.mapstruct.ap.internal.model.common.Assignment.AssignmentType.D
 public class PropertyMapping extends ModelElement {
 
     private final String name;
+    private final String sourcePropertyName;
     private final String sourceBeanName;
     private final String targetWriteAccessorName;
     private final ReadAccessor targetReadAccessorProvider;
@@ -286,6 +288,7 @@ public class PropertyMapping extends ModelElement {
             }
 
             return new PropertyMapping(
+                sourcePropertyName,
                 targetPropertyName,
                 rightHandSide.getSourceParameterName(),
                 targetWriteAccessor.getSimpleName(),
@@ -301,7 +304,8 @@ public class PropertyMapping extends ModelElement {
         private Assignment forge( ) {
             Assignment assignment;
             Type sourceType = rightHandSide.getSourceType();
-            if ( (sourceType.isCollectionType() || sourceType.isArrayType()) && targetType.isIterableType() ) {
+            if ( ( sourceType.isCollectionType() || sourceType.isArrayType()) && targetType.isIterableType()
+                    || ( sourceType.isIterableType() && targetType.isCollectionType() ) ) {
                 assignment = forgeIterableMapping( sourceType, targetType, rightHandSide );
             }
             else if ( sourceType.isMapType() && targetType.isMapType() ) {
@@ -743,7 +747,7 @@ public class PropertyMapping extends ModelElement {
             targetType = targetType.withoutBounds();
             ForgedMethod methodRef = prepareForgedMethod( sourceType, targetType, source, "[]" );
 
-            ContainerMappingMethod iterableMappingMethod = builder
+            Supplier<MappingMethod> mappingMethodCreator = () -> builder
                 .mappingContext( ctx )
                 .method( methodRef )
                 .selectionParameters( selectionParameters )
@@ -751,7 +755,7 @@ public class PropertyMapping extends ModelElement {
                 .positionHint( positionHint )
                 .build();
 
-            return createForgedAssignment( source, methodRef, iterableMappingMethod );
+            return getOrCreateForgedAssignment( source, methodRef, mappingMethodCreator );
         }
 
         private ForgedMethod prepareForgedMethod(Type sourceType, Type targetType, SourceRHS source, String suffix) {
@@ -769,12 +773,12 @@ public class PropertyMapping extends ModelElement {
             ForgedMethod methodRef = prepareForgedMethod( sourceType, targetType, source, "{}" );
 
             MapMappingMethod.Builder builder = new MapMappingMethod.Builder();
-            MapMappingMethod mapMappingMethod = builder
+            Supplier<MappingMethod> mapMappingMethodCreator = () -> builder
                 .mappingContext( ctx )
                 .method( methodRef )
                 .build();
 
-            return createForgedAssignment( source, methodRef, mapMappingMethod );
+            return getOrCreateForgedAssignment( source, methodRef, mapMappingMethodCreator );
         }
 
         private Assignment forgeMapping(SourceRHS sourceRHS) {
@@ -1098,16 +1102,17 @@ public class PropertyMapping extends ModelElement {
         ReadAccessor targetReadAccessorProvider,
         Type targetType, Assignment propertyAssignment,
         Set<String> dependsOn, Assignment defaultValueAssignment, boolean constructorMapping) {
-        this( name, null, targetWriteAccessorName, targetReadAccessorProvider,
+        this( name, null, null, targetWriteAccessorName, targetReadAccessorProvider,
             targetType, propertyAssignment, dependsOn, defaultValueAssignment,
             constructorMapping
         );
     }
 
-    private PropertyMapping(String name, String sourceBeanName, String targetWriteAccessorName,
-        ReadAccessor targetReadAccessorProvider, Type targetType,
-        Assignment assignment,
-        Set<String> dependsOn, Assignment defaultValueAssignment, boolean constructorMapping) {
+    private PropertyMapping(String sourcePropertyName, String name, String sourceBeanName,
+                            String targetWriteAccessorName, ReadAccessor targetReadAccessorProvider, Type targetType,
+                            Assignment assignment,
+                            Set<String> dependsOn, Assignment defaultValueAssignment, boolean constructorMapping) {
+        this.sourcePropertyName = sourcePropertyName;
         this.name = name;
         this.sourceBeanName = sourceBeanName;
         this.targetWriteAccessorName = targetWriteAccessorName;
@@ -1125,6 +1130,10 @@ public class PropertyMapping extends ModelElement {
      */
     public String getName() {
         return name;
+    }
+
+    public String getSourcePropertyName() {
+        return sourcePropertyName;
     }
 
     public String getSourceBeanName() {

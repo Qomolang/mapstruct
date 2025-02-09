@@ -26,6 +26,7 @@ import org.mapstruct.ap.internal.gem.MapMappingGem;
 import org.mapstruct.ap.internal.gem.MappingGem;
 import org.mapstruct.ap.internal.gem.MappingsGem;
 import org.mapstruct.ap.internal.gem.ObjectFactoryGem;
+import org.mapstruct.ap.internal.gem.SourcePropertyNameGem;
 import org.mapstruct.ap.internal.gem.SubclassMappingGem;
 import org.mapstruct.ap.internal.gem.SubclassMappingsGem;
 import org.mapstruct.ap.internal.gem.TargetPropertyNameGem;
@@ -35,6 +36,7 @@ import org.mapstruct.ap.internal.model.common.Parameter;
 import org.mapstruct.ap.internal.model.common.Type;
 import org.mapstruct.ap.internal.model.common.TypeFactory;
 import org.mapstruct.ap.internal.model.source.BeanMappingOptions;
+import org.mapstruct.ap.internal.model.source.ConditionOptions;
 import org.mapstruct.ap.internal.model.source.EnumMappingOptions;
 import org.mapstruct.ap.internal.model.source.IterableMappingOptions;
 import org.mapstruct.ap.internal.model.source.MapMappingOptions;
@@ -52,6 +54,7 @@ import org.mapstruct.ap.internal.util.ElementUtils;
 import org.mapstruct.ap.internal.util.Executables;
 import org.mapstruct.ap.internal.util.FormattingMessager;
 import org.mapstruct.ap.internal.util.Message;
+import org.mapstruct.ap.internal.util.MetaAnnotations;
 import org.mapstruct.ap.internal.util.RepeatableAnnotations;
 import org.mapstruct.ap.internal.util.TypeUtils;
 import org.mapstruct.ap.spi.EnumTransformationStrategy;
@@ -72,6 +75,7 @@ public class MethodRetrievalProcessor implements ModelElementProcessor<Void, Lis
     private static final String SUB_CLASS_MAPPINGS_FQN = "org.mapstruct.SubclassMappings";
     private static final String VALUE_MAPPING_FQN = "org.mapstruct.ValueMapping";
     private static final String VALUE_MAPPINGS_FQN = "org.mapstruct.ValueMappings";
+    private static final String CONDITION_FQN = "org.mapstruct.Condition";
     private FormattingMessager messager;
     private TypeFactory typeFactory;
     private AccessorNamingUtils accessorNaming;
@@ -357,7 +361,7 @@ public class MethodRetrievalProcessor implements ModelElementProcessor<Void, Lis
             List<SourceMethod> contextProvidedMethods = new ArrayList<>( contextParamMethods.size() );
             for ( SourceMethod sourceMethod : contextParamMethods ) {
                 if ( sourceMethod.isLifecycleCallbackMethod() || sourceMethod.isObjectFactory()
-                    || sourceMethod.isPresenceCheck() ) {
+                    || sourceMethod.getConditionOptions().isAnyStrategyApplicable() ) {
                     contextProvidedMethods.add( sourceMethod );
                 }
             }
@@ -385,13 +389,14 @@ public class MethodRetrievalProcessor implements ModelElementProcessor<Void, Lis
 
         return new SourceMethod.Builder()
             .setDeclaringMapper( usedMapper.equals( mapperToImplement ) ? null : usedMapperAsType )
-            .setDefininingType( definingType )
+            .setDefiningType( definingType )
             .setExecutable( method )
             .setParameters( parameters )
             .setReturnType( returnType )
             .setExceptionTypes( exceptionTypes )
             .setTypeUtils( typeUtils )
             .setTypeFactory( typeFactory )
+            .setConditionOptions( getConditionOptions( method, parameters ) )
             .setVerboseLogging( options.isVerbose() )
             .build();
     }
@@ -415,6 +420,16 @@ public class MethodRetrievalProcessor implements ModelElementProcessor<Void, Lis
 
     private boolean isValidPresenceCheckMethod(ExecutableElement method, List<Parameter> parameters, Type returnType) {
         for ( Parameter param : parameters ) {
+
+            if ( param.isSourcePropertyName() && !param.getType().isString() ) {
+                messager.printMessage(
+                    param.getElement(),
+                    SourcePropertyNameGem.instanceOn( param.getElement() ).mirror(),
+                    Message.RETRIEVAL_SOURCE_PROPERTY_NAME_WRONG_TYPE
+                );
+                return false;
+            }
+
             if ( param.isTargetPropertyName() && !param.getType().isString() ) {
                 messager.printMessage(
                     param.getElement(),
@@ -540,6 +555,11 @@ public class MethodRetrievalProcessor implements ModelElementProcessor<Void, Lis
                 return false;
             }
 
+            if ( !parameterType.isIterableOrStreamType() && resultType.isArrayType() ) {
+                messager.printMessage( method, Message.RETRIEVAL_NON_ITERABLE_TO_ARRAY );
+                return false;
+            }
+
             if ( parameterType.isPrimitive() ) {
                 messager.printMessage( method, Message.RETRIEVAL_PRIMITIVE_PARAMETER );
                 return false;
@@ -620,6 +640,18 @@ public class MethodRetrievalProcessor implements ModelElementProcessor<Void, Lis
                                                             SubclassValidator validator) {
         return new RepeatableSubclassMappings( beanMapping, sourceParameters, resultType, validator )
                         .getProcessedAnnotations( method );
+    }
+
+    /**
+     * Retrieves the conditions configured via {@code @Condition} from the given method.
+     *
+     * @param method     The method of interest
+     * @param parameters
+     * @return The condition options for the given method
+     */
+
+    private Set<ConditionOptions> getConditionOptions(ExecutableElement method, List<Parameter> parameters) {
+        return new MetaConditions( parameters ).getProcessedAnnotations( method );
     }
 
     private class RepeatableMappings extends RepeatableAnnotations<MappingGem, MappingsGem, MappingOptions> {
@@ -761,6 +793,34 @@ public class MethodRetrievalProcessor implements ModelElementProcessor<Void, Lis
         @Override
         protected void addInstances(ValueMappingsGem gems, Element source, Set<ValueMappingOptions> mappings) {
             ValueMappingOptions.fromMappingsGem( gems, (ExecutableElement) source, messager, mappings );
+        }
+    }
+
+    private class MetaConditions extends MetaAnnotations<ConditionGem, ConditionOptions> {
+
+        protected final List<Parameter> parameters;
+
+        protected MetaConditions(List<Parameter> parameters) {
+            super( elementUtils, CONDITION_FQN );
+            this.parameters = parameters;
+        }
+
+        @Override
+        protected ConditionGem instanceOn(Element element) {
+            return ConditionGem.instanceOn( element );
+        }
+
+        @Override
+        protected void addInstance(ConditionGem gem, Element source, Set<ConditionOptions> values) {
+            ConditionOptions options = ConditionOptions.getInstanceOn(
+                gem,
+                (ExecutableElement) source,
+                parameters,
+                messager
+            );
+            if ( options != null ) {
+                values.add( options );
+            }
         }
     }
 }

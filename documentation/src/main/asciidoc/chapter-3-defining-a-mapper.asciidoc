@@ -39,7 +39,7 @@ The property name as defined in the http://www.oracle.com/technetwork/java/javas
 ====
 [TIP]
 ====
-By means of the `@BeanMapping(ignoreByDefault = true)` the default behavior will be *explicit mapping*, meaning that all mappings have to be specified by means of the `@Mapping` and no warnings will be issued on missing target properties.
+By means of the `@BeanMapping(ignoreByDefault = true)` the default behavior will be *explicit mapping*, meaning that all mappings (including nested ones) have to be specified by means of the `@Mapping` and no warnings will be issued on missing target properties.
 This allows to ignore all fields, except the ones that are explicitly defined through `@Mapping`.
 ====
 [TIP]
@@ -302,7 +302,7 @@ If you don't want explicitly name all properties from nested source bean, you ca
 The generated code will map every property from `CustomerDto.record` to `Customer` directly, without need to manually name any of them.
 The same goes for `Customer.account`.
 
-When there are conflicts, these can be resolved by explicitely defining the mapping. For instance in the example above. `name` occurs in `CustomerDto.record` and in `CustomerDto.account`. The mapping `@Mapping( target = "name", source = "record.name" )` resolves this conflict.
+When there are conflicts, these can be resolved by explicitly defining the mapping. For instance in the example above. `name` occurs in `CustomerDto.record` and in `CustomerDto.account`. The mapping `@Mapping( target = "name", source = "record.name" )` resolves this conflict.
 
 
 This "target this" notation can be very useful when mapping hierarchical objects to flat objects and vice versa (`@InheritInverseConfiguration`).
@@ -448,7 +448,7 @@ E.g. If an object factory exists for our `PersonBuilder` then this factory would
 
 [NOTE]
 ======
-Detected builders influence `@BeforeMapping` and `@AfterMapping` behavior. See chapter `Mapping customization with before-mapping and after-mapping methods` for more information.
+Detected builders influence `@BeforeMapping` and `@AfterMapping` behavior. See <<customizing-mappings-with-before-and-after>> for more information.
 ======
 
 .Person with Builder example
